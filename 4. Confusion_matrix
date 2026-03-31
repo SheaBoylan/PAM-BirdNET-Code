@@ -1,0 +1,69 @@
+###CONFUSION MATRIX###
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Create confusion matrix data
+confusion_data <- playback_detections %>%
+  count(expected_species, Scientific.name) %>%
+  # Calculate percentages by expected species (row percentages)
+  group_by(expected_species) %>%
+  mutate(
+    total = sum(n),
+    percentage = (n / total) * 100
+  ) %>%
+  ungroup()
+
+# View top confusions
+confusion_data %>%
+  filter(expected_species != Scientific.name) %>%  # Only misclassifications
+  arrange(desc(n)) %>%
+  head(20)
+
+# Create matrix format
+confusion_matrix <- confusion_data %>%
+  select(expected_species, Scientific.name, n) %>%
+  pivot_wider(
+    names_from = Scientific.name,
+    values_from = n,
+    values_fill = 0
+  )
+
+print(confusion_matrix)
+
+# Overall confusion summary
+confusion_summary <- playback_detections %>%
+  mutate(
+    correct = (expected_species == Scientific.name)
+  ) %>%
+  summarise(
+    total_predictions = n(),
+    correct_predictions = sum(correct),
+    incorrect_predictions = sum(!correct),
+    overall_accuracy = mean(correct) * 100
+  )
+
+print(confusion_summary)
+
+# Species-specific accuracy
+species_accuracy <- playback_detections %>%
+  mutate(correct = (expected_species == Scientific.name)) %>%
+  group_by(expected_species) %>%
+  summarise(
+    n_predictions = n(),
+    n_correct = sum(correct),
+    accuracy_pct = mean(correct) * 100,
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(accuracy_pct))
+
+print(species_accuracy)
+
+# What are the top misclassifications?
+top_confusions <- playback_detections %>%
+  filter(expected_species != Scientific.name) %>%  # Only errors
+  count(expected_species, Scientific.name, sort = TRUE) %>%
+  head(10)
+
+print(top_confusions)
+
