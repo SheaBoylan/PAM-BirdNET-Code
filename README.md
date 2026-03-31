@@ -1,4 +1,4 @@
-#PAM-BirdNET Analysis
+# PAM-BirdNET Analysis
 
 This repository contains the R code for a dissertation 
 quantifying the probability of detection and classification precision of 20 Scottish woodland birds 
@@ -14,7 +14,7 @@ when using the automated classifier BirdNET to label their vocalisation.
 >Note: The variable 'masking' refers to
 > 'community vocal' activity in dissertation text.
 
-**Script order of execution:
+##Script order of execution:
 1. Data_processing_and_probability_of_detection_models
 2. Classification_precision_models + community_vocal_activity_metric
 3. Community_vocal_activity_analysis
@@ -35,5 +35,5 @@ Analysis requires the following CSV files in order to operate:
 -'Diss covariates no LAI.csv'
 -'LAI conversion.csv'
 
-#Software
+##Software
 All analysis conducted in RStudio 2025.09.0 Build 387.
