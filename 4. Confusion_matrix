@@ -1,7 +1,5 @@
 ###CONFUSION MATRIX###
-library(dplyr)
-library(tidyr)
-library(ggplot2)
+
 
 # Create confusion matrix data
 confusion_data <- playback_detections %>%
