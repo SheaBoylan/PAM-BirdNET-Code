@@ -15,6 +15,7 @@ when using the automated classifier BirdNET to label their vocalisation.
 > 'community vocal' activity in dissertation text.
 
 ##Script order of execution:
+
 1. Data_processing_and_probability_of_detection_models
 2. Classification_precision_models + community_vocal_activity_metric
 3. Community_vocal_activity_analysis
@@ -36,4 +37,5 @@ Analysis requires the following CSV files in order to operate:
 -'LAI conversion.csv'
 
 ##Software
+
 All analysis conducted in RStudio 2025.09.0 Build 387.
