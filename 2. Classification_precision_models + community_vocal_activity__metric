@@ -1,3 +1,10 @@
+# NOTE ON TERMINOLOGY
+# The variable 'accuracy' used throughout this code corresponds to 
+# 'classification precision' as used in the main dissertation text.
+# The variable 'masking' refers to 
+# 'commmunity vocal activity' as used int the main dissertation text. 
+
+
 ###ACCURACY MODELS + BUILDING OF MASKING METRIC###
 
 #Building playback dataframe
