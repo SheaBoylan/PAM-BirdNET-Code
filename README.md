@@ -10,6 +10,7 @@ when using the automated classifier BirdNET to label their vocalisation.
 
 >Note: The variable 'accuracy' used throughout the code corresponds to 
 >'classification precision' as used in the dissertation text.
+>'masking' refers to 'community vocal' activity in dissertation text.
 
 **Script order of execution:
 1. Data_processing_and_probability_of_detection_models
