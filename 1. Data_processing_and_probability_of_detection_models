@@ -13,7 +13,7 @@ library(ggrepel)
 
 #Setting working directory
 setwd("C:/Users/Boyla/OneDrive/Desktop/University work/Year 4/Dissertation/Data Management and Analysis/DATA FOR R/CSV format")
-
+out_dir <- "C:/Users/Boyla/OneDrive/Desktop/University work/Year 4/Dissertation/Figures"
 
 #Reading in and defining data frames
 raw_detections <- read.csv("Combined Detection Table.csv")
