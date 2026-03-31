@@ -1,0 +1,305 @@
+# =============================================================================
+# THRESHOLD ANALYSIS & DETECTION-CLASSIFICATION CORRELATION
+# Requires: detection_mask_veg_log, accuracy_int, full_zero_filled, 
+#           accuracy_summary, species_accuracy, mean_ba, mean_can_LAI, 
+#           mean_grd_LAI, col_dec, col_pine, bar_theme, base_theme, out_dir
+# =============================================================================
+
+library(ggrepel)
+
+thresholds <- c(0.95, 0.90, 0.80, 0.50, 0.20, 0.10, 0.05)
+dist_seq   <- seq(0, 100, by = 0.1)
+mean_nont  <- mean(full_zero_filled$n_nontarget, na.rm = TRUE)
+
+# =============================================================================
+# HELPER: Extract threshold distances from prediction dataframe
+# =============================================================================
+
+label_threshold <- function(distances, t) {
+  if (length(distances) == 0) "Not achieved" else
+    if (max(distances) >= 100) ">100m" else
+      paste0(round(max(distances), 1), "m")
+}
+
+threshold_cols <- function(pred_df, group_var = NULL) {
+  if (!is.null(group_var)) {
+    pred_df <- pred_df %>% group_by(across(all_of(group_var)))
+  }
+  pred_df %>%
+    summarise(
+      across(everything(), ~ NA, .names = "drop"),
+      .groups = "drop"
+    ) %>%
+    select(any_of(group_var)) %>%
+    bind_cols(
+      map_dfc(thresholds, function(t) {
+        pred_df %>%
+          { if (!is.null(group_var)) group_by(., across(all_of(group_var))) else . } %>%
+          summarise(
+            val = label_threshold(distance_m[fit >= t], t),
+            .groups = "drop"
+          ) %>%
+          select(val) %>%
+          setNames(paste0("p_", round(t * 100), "pct"))
+      })
+    )
+}
+
+rename_threshold_cols <- function(df) {
+  names(df) <- gsub("p_95pct", "95%",
+                    gsub("p_90pct", "90%",
+                         gsub("p_80pct", "80%",
+                              gsub("p_50pct", "50%",
+                                   gsub("p_20pct", "20%",
+                                        gsub("p_10pct", "10%",
+                                             gsub("p_5pct",  "5%", names(df))))))))
+  df
+}
+
+
+# =============================================================================
+# FIGURE: Species detection rate bar chart
+# =============================================================================
+
+species_detection_rates <- full_zero_filled %>%
+  group_by(scientific_name) %>%
+  summarise(
+    total_possible = n(),
+    total_detected = sum(detected),
+    detection_rate  = mean(detected) * 100,
+    .groups = "drop"
+  ) %>%
+  arrange(detection_rate) %>%
+  mutate(scientific_name = factor(scientific_name, levels = scientific_name))
+
+fig_species_det <- ggplot(species_detection_rates,
+                          aes(x = detection_rate, y = scientific_name)) +
+  geom_col(width = 0.7, fill = col_dec) +
+  geom_text(aes(label = paste0(round(detection_rate, 1), "%")),
+            hjust = -0.15, size = 3.2, colour = "grey30") +
+  scale_x_continuous(limits = c(0, 115), breaks = c(0, 25, 50, 75, 100),
+                     labels = percent_format(scale = 1, accuracy = 1),
+                     expand = expansion(add = c(0, 0))) +
+  labs(x = "Detection rate (%)", y = NULL) +
+  bar_theme +
+  theme(axis.text.y = element_text(face = "italic", size = 10))
+
+ggsave(file.path(out_dir, "FigureS_Species_Detection_Rate.png"),
+       fig_species_det, width = 8, height = 7, dpi = 300, bg = "white")
+cat("✓ Species detection rate figure saved\n")
+
+
+# =============================================================================
+# POPULATION-LEVEL THRESHOLD TABLE (detection + classification, by stand type)
+# =============================================================================
+
+build_pop_threshold <- function(pred_df, metric_name) {
+  results <- data.frame()
+  for (st in c("deciduous", "pine")) {
+    st_pred <- pred_df %>% filter(stand_type == st)
+    row <- data.frame(Metric = metric_name, `Stand Type` = st,
+                      check.names = FALSE)
+    for (t in thresholds) {
+      col_name <- paste0(round(t * 100), "%")
+      row[[col_name]] <- label_threshold(
+        st_pred$distance_m[st_pred$fit >= t], t)
+    }
+    results <- bind_rows(results, row)
+  }
+  results
+}
+
+pop_threshold_table <- bind_rows(
+  build_pop_threshold(pop_det, "Detection Probability"),
+  build_pop_threshold(pop_acc, "Classification Accuracy")
+)
+
+print(pop_threshold_table)
+
+write.csv(pop_threshold_table,
+          file.path(out_dir, "Threshold_Table_Population.csv"),
+          row.names = FALSE)
+cat("✓ Population threshold table saved\n")
+
+
+# =============================================================================
+# HELPER: Species-level threshold loop
+# =============================================================================
+
+get_species_thresholds <- function(species_list, newdata_fn, 
+                                   model, by_stand = TRUE) {
+  
+  results <- data.frame()
+  stands  <- c("deciduous", "pine")
+  
+  for (sp in species_list) {
+    
+    if (by_stand) {
+      for (st in stands) {
+        sp_pred <- newdata_fn(sp, st)
+        sp_pred$fit <- predict(model, newdata = sp_pred,
+                               type = "response", re.form = NULL,
+                               allow.new.levels = TRUE)
+        row <- data.frame(species = sp, stand_type = st)
+        for (t in thresholds) {
+          row[[paste0("p_", round(t*100), "pct")]] <-
+            label_threshold(sp_pred$distance_m[sp_pred$fit >= t], t)
+        }
+        results <- bind_rows(results, row)
+      }
+    } else {
+      pred_dec  <- predict(model, newdata = newdata_fn(sp, "deciduous"),
+                           type = "response", re.form = NULL,
+                           allow.new.levels = TRUE)
+      pred_pine <- predict(model, newdata = newdata_fn(sp, "pine"),
+                           type = "response", re.form = NULL,
+                           allow.new.levels = TRUE)
+      sp_pred        <- newdata_fn(sp, "deciduous")
+      sp_pred$fit    <- (pred_dec + pred_pine) / 2
+      row <- data.frame(species = sp)
+      for (t in thresholds) {
+        row[[paste0("p_", round(t*100), "pct")]] <-
+          label_threshold(sp_pred$distance_m[sp_pred$fit >= t], t)
+      }
+      results <- bind_rows(results, row)
+    }
+  }
+  
+  results %>%
+    arrange(species, if("stand_type" %in% names(.)) stand_type) %>%
+    rename_threshold_cols() %>%
+    rename(Species = species,
+           any_of(c("Stand Type" = "stand_type")))
+}
+
+
+# =============================================================================
+# DETECTION THRESHOLD TABLES
+# =============================================================================
+
+det_newdata <- function(sp, st) {
+  data.frame(distance_m = dist_seq, stand_type = st,
+             total_ba_plot = mean_ba,
+             canopy_LAI_conversion = mean_can_LAI,
+             ground_LAI_conversion = mean_grd_LAI,
+             n_nontarget = mean_nont,
+             scientific_name = sp, site = NA)
+}
+
+# By stand type
+det_thresh_stand <- get_species_thresholds(
+  unique(full_zero_filled$scientific_name),
+  det_newdata, detection_mask_veg_log, by_stand = TRUE)
+
+print(det_thresh_stand)
+write.csv(det_thresh_stand,
+          file.path(out_dir, "Species_Detection_Thresholds_StandType.csv"),
+          row.names = FALSE)
+cat("✓ Species detection thresholds (by stand type) saved\n")
+
+# Marginalised
+det_thresh_marginal <- get_species_thresholds(
+  unique(full_zero_filled$scientific_name),
+  det_newdata, detection_mask_veg_log, by_stand = FALSE)
+
+print(det_thresh_marginal)
+write.csv(det_thresh_marginal,
+          file.path(out_dir, "Species_Detection_Thresholds_Marginal.csv"),
+          row.names = FALSE)
+cat("✓ Species detection thresholds (marginal) saved\n")
+
+
+# =============================================================================
+# CLASSIFICATION THRESHOLD TABLES
+# =============================================================================
+
+acc_newdata <- function(sp, st) {
+  data.frame(distance_m = dist_seq, stand_type = st,
+             expected_species = sp,
+             transect_id = NA, n_total = 1)
+}
+
+# By stand type
+acc_thresh_stand <- get_species_thresholds(
+  unique(accuracy_summary$expected_species),
+  acc_newdata, accuracy_int_bb_rs, by_stand = TRUE)
+
+print(acc_thresh_stand)
+write.csv(acc_thresh_stand,
+          file.path(out_dir, "Species_Classification_Thresholds_StandType.csv"),
+          row.names = FALSE)
+cat("✓ Species classification thresholds (by stand type) saved\n")
+
+# Marginalised
+acc_thresh_marginal <- get_species_thresholds(
+  unique(accuracy_summary$expected_species),
+  acc_newdata, accuracy_int, by_stand = FALSE)
+
+print(acc_thresh_marginal)
+write.csv(acc_thresh_marginal,
+          file.path(out_dir, "Species_Classification_Thresholds_Marginal.csv"),
+          row.names = FALSE)
+cat("✓ Species classification thresholds (marginal) saved\n")
+
+
+# =============================================================================
+# DETECTION vs CLASSIFICATION CORRELATION
+# =============================================================================
+
+detection_classification_comparison <- species_detection_rates %>%
+  select(scientific_name, detection_rate) %>%
+  left_join(species_accuracy %>% select(expected_species, accuracy_pct),
+            by = c("scientific_name" = "expected_species")) %>%
+  filter(!is.na(accuracy_pct))
+
+# Spearman correlation
+cor_test <- cor.test(detection_classification_comparison$detection_rate,
+                     detection_classification_comparison$accuracy_pct,
+                     method = "spearman")
+print(cor_test)
+
+# Save correlation table
+cor_table <- data.frame(
+  Test       = "Spearman's rank correlation",
+  Variable_1 = "Detection rate (%)",
+  Variable_2 = "Classification precision (%)",
+  N          = nrow(detection_classification_comparison),
+  rho        = round(cor_test$estimate, 3),
+  S          = round(cor_test$statistic, 2),
+  p_value    = round(cor_test$p.value, 3)
+)
+
+write.csv(cor_table,
+          file.path(out_dir, "Detection_Classification_Correlation.csv"),
+          row.names = FALSE)
+cat("✓ Correlation table saved\n")
+
+# Scatter plot
+fig_cor <- ggplot(detection_classification_comparison,
+                  aes(x = detection_rate, y = accuracy_pct)) +
+  geom_smooth(method = "lm", colour = col_pine,
+              fill = col_pine, alpha = 0.15, linewidth = 0.8) +
+  geom_point(size = 3, colour = col_dec) +
+  geom_text_repel(aes(label = scientific_name),
+                  size = 2.5, fontface = "italic",
+                  max.overlaps = Inf, box.padding = 0.4,
+                  point.padding = 0.3, segment.colour = "grey60",
+                  segment.size = 0.3, min.segment.length = 0.2) +
+  annotate("text", x = 43, y = 98,
+           label = paste0("Spearman's \u03c1 = ",
+                          round(cor_test$estimate, 3),
+                          ", p = ",
+                          round(cor_test$p.value, 3)),
+           hjust = 0, size = 3.5, colour = "grey30") +
+  scale_x_continuous(limits = c(40, 100),
+                     breaks = c(40, 50, 60, 70, 80, 90, 100),
+                     labels = percent_format(scale = 1, accuracy = 1)) +
+  scale_y_continuous(limits = c(0, 105),
+                     breaks = c(0, 25, 50, 75, 100),
+                     labels = percent_format(scale = 1, accuracy = 1)) +
+  labs(x = "Detection rate (%)", y = "Classification precision (%)") +
+  base_theme
+
+ggsave(file.path(out_dir, "FigureS_Detection_Classification_Correlation.png"),
+       fig_cor, width = 8, height = 6, dpi = 300, bg = "white")
+cat("✓ Correlation scatter saved\n")
