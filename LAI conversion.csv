@@ -1,0 +1,17 @@
+﻿transect_id,stand_type,canopy_LAI,ground_LAI,canopy_LAI_conversion,ground_LAI_conversion,notes
+CFT_1,pine,4.60,6.00,8.59,6.90,"high canopy_LAI, however, this makes sense as this site was extremely dense"
+CFT_2,pine,2.25,3.25,4.20,3.74,
+CFT_3,pine,0.00,5.79,0.00,6.66,
+TFT_2,pine,2.35,2.98,4.39,3.43,
+TFT_3,pine,2.83,5.43,5.28,6.24,
+RFT_1,pine,1.84,8.06,3.44,9.27,Extremely high LAI for ground. 
+RFT_2,pine,1.91,2.86,3.57,3.29,
+RFT_3,pine,1.88,2.77,3.51,3.19,
+GGFT_1,deciduous,4.07,5.18,3.51,4.47,
+GGFT_2,deciduous,5.09,3.98,4.39,3.43,
+DFT_1,deciduous,7.35,6.02,6.34,5.19,
+DFT_2,deciduous,3.34,2.00,2.88,1.73,
+DFT_3,deciduous,5.41,6.11,4.67,5.27,
+DHFT_1,deciduous,6.22,5.90,5.36,5.09,
+DHFT_2,deciduous,4.87,6.30,4.20,5.43,
+DHFT_3,deciduous,4.11,4.77,3.54,4.11,
